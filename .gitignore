@@ -97,3 +97,6 @@ borrar/*
 
 */ExecMean.txt
 .vscode
+
+# specially for macOS
+.DS_Store

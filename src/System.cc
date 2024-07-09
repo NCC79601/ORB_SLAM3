@@ -611,6 +611,7 @@ bool System::isShutDown() {
 }
 
 // feat: add System::SavePointCloud()
+// reference: https://github.com/UZ-SLAMLab/ORB_SLAM3/issues/390
 void System::SavePointCloud(const string &filename){
     // Code is based on MapDrawer::DrawMapPoints()
     cout << endl << "Saving map point coordinates to " << filename << " ..." << endl;

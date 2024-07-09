@@ -1,8 +1,0 @@
-# Registered at https://hub.docker.com/repository/docker/chicheng/orb_slam3/general
-FROM orb_slam3:pc
-
-# Substitute the original /ORB_SLAM3 file
-COPY . /ORB_SLAM3
-
-# build
-RUN cd /ORB_SLAM3 && bash recompile.sh

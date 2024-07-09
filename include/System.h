@@ -151,6 +151,9 @@ public:
     void Shutdown();
     bool isShutDown();
 
+    // feat: add System::SavePointCloud()
+    void SavePointCloud(const string &filename);
+
     void SaveTrajectoryCSV(const string &filename);
 
     // Save camera trajectory in the TUM RGB-D dataset format.

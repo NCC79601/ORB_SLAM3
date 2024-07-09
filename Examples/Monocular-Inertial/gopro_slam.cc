@@ -118,6 +118,10 @@ int main(int argc, char **argv) {
   std::string output_trajectory_csv;
   app.add_option("-o,--output_trajectory_csv", output_trajectory_csv);
 
+  // feat: add output_point_cloud_csv
+  std::string output_point_cloud_csv;
+  app.add_option("--output_point_cloud_csv", output_point_cloud_csv);
+
   std::string load_map;
   app.add_option("-l,--load_map", load_map);
 
@@ -282,6 +286,11 @@ int main(int argc, char **argv) {
 
   if (!output_trajectory_csv.empty()) {
     SLAM.SaveTrajectoryCSV(output_trajectory_csv);
+  }
+
+  // feat: add output of point cloud
+  if (!output_point_cloud_csv.empty()) {
+    SLAM.SavePointCloud(output_point_cloud_csv);
   }
 
   return 0;

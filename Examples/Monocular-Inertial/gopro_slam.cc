@@ -33,6 +33,9 @@
 #include <json.h>
 #include <CLI11.hpp>
 
+// feat: use regex
+#include <regex>
+
 using namespace std;
 using nlohmann::json;
 const double MS_TO_S = 1e-3; ///< Milliseconds to second conversion
@@ -117,6 +120,10 @@ int main(int argc, char **argv) {
 
   std::string output_trajectory_csv;
   app.add_option("-o,--output_trajectory_csv", output_trajectory_csv);
+
+  // feat: add output_absolute_trajectory_csv
+  std::string output_absolute_trajectory_csv;
+  app.add_option("--output_absolute_trajectory_csv", output_absolute_trajectory_csv);
 
   // feat: add output_point_cloud_csv
   std::string output_point_cloud_csv;
@@ -286,6 +293,11 @@ int main(int argc, char **argv) {
 
   if (!output_trajectory_csv.empty()) {
     SLAM.SaveTrajectoryCSV(output_trajectory_csv);
+  }
+  
+  // feat: add absolute trajectory output
+  if (!output_absolute_trajectory_csv.empty()) {
+    SLAM.SaveAbsoluteTrajectoryCSV(output_absolute_trajectory_csv);
   }
 
   // feat: add output of point cloud

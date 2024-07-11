@@ -643,8 +643,8 @@ void System::SavePointCloud(const string &filename){
 
     // Get the output file stream in fixed-point format for map points
     ofstream f;
-    f << "pos_x, pos_y, pos_z";
     f.open(filename.c_str());
+    f << "pos_x, pos_y, pos_z" << endl;
     f << fixed;
 
     // TODO figure out if we need to consider whether the presence of IMU
@@ -658,7 +658,11 @@ void System::SavePointCloud(const string &filename){
     // Iterate over map points, skip "bad" ones and reference map points
     for (size_t i=0, iend=vpMPs.size(); i<iend;i++)
     {
-        if (vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i])){
+        // if (vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i])){
+        //     skipped_map_points++;
+        //     continue;
+        // }
+        if (vpMPs[i]->isBad()) {
             skipped_map_points++;
             continue;
         }
@@ -699,9 +703,10 @@ void System::SavePointCloud(const string &filename){
     // Iterate over reference map points, skip if bad
     for (set<MapPoint*>::iterator sit=spRefMPs.begin(), send=spRefMPs.end(); sit!=send; sit++)
     {
-        if((*sit)->isBad()){
-            continue;
+        // save both the reference and the normal map points
+        if ((*sit)->isBad()/* || spRefMPs.count(*sit)*/){
             skipped_map_points++;
+            continue;
         }
         Eigen::Matrix<float,3,1> pos = (*sit)->GetWorldPos();
         f << pos(0) << ", " << pos(1) << ", " << pos(2) << endl;
@@ -712,6 +717,122 @@ void System::SavePointCloud(const string &filename){
 
     // Close the output stream
     f.close();
+}
+
+// feat: add System::SaveAbsoluteTrajectoryCSV()
+// point coordinates are in the world coordinate system
+// mofidied from System::SaveTrajectoryCSV()
+void System::SaveAbsoluteTrajectoryCSV(const string &filename)
+{
+    cout << endl << "Saving  absolute camera trajectory to " << filename << " ..." << endl;
+    if(mSensor==MONOCULAR)
+    {
+        cerr << "ERROR: SaveAbsoluteTrajectoryCSV cannot be used for monocular." << endl;
+        return;
+    }
+
+    // Select the appropriate Map
+    vector<Map*> vpMaps = mpAtlas->GetAllMaps();
+    int numMaxKFs = 0;
+    Map* pBiggerMap;
+    std::cout << "There are " << std::to_string(vpMaps.size()) << " maps in the atlas" << std::endl;
+    for(Map* pMap :vpMaps)
+    {
+        std::cout << "  Map " << std::to_string(pMap->GetId()) << " has " << std::to_string(pMap->GetAllKeyFrames().size()) << " KFs" << std::endl;
+        if(pMap->GetAllKeyFrames().size() > numMaxKFs)
+        {
+            numMaxKFs = pMap->GetAllKeyFrames().size();
+            pBiggerMap = pMap;
+        }
+    }
+
+    vector<KeyFrame*> vpKFs = pBiggerMap->GetAllKeyFrames();
+    sort(vpKFs.begin(),vpKFs.end(),KeyFrame::lId);
+
+    // Transform all keyframes so that the first keyframe is at the origin.
+    // After a loop closure the first keyframe might not be at the origin.
+    // FOR ABSOLUTE TRAJECTORY, WE DO NOT NEED TO TRANSFORM THE KEYFRAMES
+    // Sophus::SE3f Two = vpKFs[0]->GetPoseInverse();
+
+    // open file
+    ofstream f;
+    f.open(filename.c_str());
+    // Sets the floatfield format flag for the str stream to fixed.
+    f << fixed;
+
+    // add header
+    f << "frame_idx,timestamp,state,is_lost,is_keyframe,x,y,z,q_x,q_y,q_z,q_w" << endl;
+
+    // Frame pose is stored relative to its reference keyframe (which is optimized by BA and pose graph).
+    // We need to get first the keyframe pose and then concatenate the relative transformation.
+    // Frames not localized (tracking failure) are not saved.
+
+    // For each frame we have a reference keyframe (lRit), the timestamp (lT) and a flag
+    // which is true when tracking failed (lbL).
+    list<ORB_SLAM3::KeyFrame*>::iterator iter_reference_keyframe = mpTracker->mlpReferences.begin();
+    list<double>::iterator iter_timestamp = mpTracker->mlFrameTimes.begin();
+    list<bool>::iterator iter_is_lost = mpTracker->mlbLost.begin();
+    list<Tracking::eTrackingState>::iterator iter_state = mpTracker->mlState.begin();
+    int frame_idx = 0;
+    for(list<Sophus::SE3f>::iterator iter_relative_pose=mpTracker->mlRelativeFramePoses.begin(),
+            iter_end=mpTracker->mlRelativeFramePoses.end();
+        iter_relative_pose!=iter_end;
+        iter_relative_pose++, iter_reference_keyframe++, iter_timestamp++, iter_is_lost++, iter_state++, frame_idx++)
+    {
+        // write frame_idx, timestamp
+        f << frame_idx << ',';
+        f << setprecision(6) << *iter_timestamp << ',';
+        f << *iter_state << ',';
+        
+        if (*iter_is_lost){
+            // tracking lost, write all zero for position and rotation
+            f << "true,false,";
+            f << "0,0,0,0,0,0,0" << endl;
+            continue;
+        }
+
+        
+        KeyFrame* pKF = *iter_reference_keyframe;
+        Sophus::SE3f Trw;
+
+        // If the reference keyframe was culled, traverse the spanning tree to get a suitable keyframe.
+        while(pKF->isBad())
+        {
+            Trw = Trw * pKF->mTcp;
+            pKF = pKF->GetParent();
+        }
+
+        if(!pKF || pKF->GetMap() != pBiggerMap)
+        {
+            // deal with corner case where parent kf is from another map
+            cout << "--Parent KF is from another map" << endl;
+            f << "true,false,";
+            f << "0,0,0,0,0,0,0" << endl;
+            continue;
+        }
+
+        bool is_keyframe = (pKF->mTimeStamp == *iter_timestamp);
+
+        Trw = Trw * pKF->GetPose()/* * Two*/; // fix: cancel the inverse transformation
+
+        Sophus::SE3f Tcw = (*iter_relative_pose) * Trw;
+        Sophus::SE3f Twc = Tcw.inverse();
+
+        Eigen::Vector3f twc = Twc.translation();
+        Eigen::Quaternionf q = Twc.unit_quaternion();
+
+        // Write regular data
+        f << "false,";
+        if (is_keyframe) {
+            f << "true,";
+        } else {
+            f << "false,";
+        }
+        f << setprecision(9) << twc(0) << ',' << twc(1) << ',' << twc(2) << ',';
+        f << setprecision(9) << q.x() << ',' << q.y() << ',' << q.z() << ',' << q.w() << endl;
+    }
+    f.close();
+    cout << endl << "CSV camera trajectory saved!" << endl;
 }
 
 void System::SaveTrajectoryCSV(const string &filename)

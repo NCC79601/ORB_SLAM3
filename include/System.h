@@ -155,6 +155,9 @@ public:
     void SavePointCloud(const string &filename);
 
     void SaveTrajectoryCSV(const string &filename);
+    
+    // feat: add System::SaveAbsoluteTrajectoryCSV()
+    void SaveAbsoluteTrajectoryCSV(const string &filename);
 
     // Save camera trajectory in the TUM RGB-D dataset format.
     // Only for stereo and RGB-D. This method does not work for monocular.
